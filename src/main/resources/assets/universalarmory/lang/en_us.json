@@ -1,0 +1,8 @@
+{
+  "block.universalarmory.armory": "Armory",
+  "container.universalarmory.armory": "Armory",
+  "itemGroup.universalarmory": "Universal Armory",
+  "screen.universalarmory.armory_work": "Armory Workbench",
+  "screen.universalarmory.armory_work.bound": "Armory bound",
+  "screen.universalarmory.armory_work.unbound": "No armory is currently bound"
+}
