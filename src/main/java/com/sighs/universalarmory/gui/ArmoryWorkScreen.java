@@ -4,7 +4,7 @@ import com.sighs.universalarmory.armory.ArmoryGunQueries;
 import com.sighs.universalarmory.armory.ArmoryInstance;
 import com.sighs.universalarmory.armory.ArmoryManager;
 import com.sighs.universalarmory.block.entity.ArmoryBlockEntity;
-import com.sighs.universalarmory.client.render.FirstPersonStyleGunPreviewRenderer;
+import com.sighs.universalarmory.client.render.GunRenderCacheQueue;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -21,7 +21,8 @@ public class ArmoryWorkScreen extends Screen {
     private static final int DISPLAY_GUN_COUNT = 17;
 
     private final List<ItemStack> displayGuns = new ArrayList<>();
-    private final FirstPersonStyleGunPreviewRenderer previewRenderer = FirstPersonStyleGunPreviewRenderer.getInstance();
+    private final List<GunRenderCacheQueue.CacheEntry> displayGunCacheEntries = new ArrayList<>();
+    private final GunRenderCacheQueue renderCacheQueue = GunRenderCacheQueue.getInstance();
 
     public ArmoryWorkScreen() {
         super(TITLE);
@@ -30,7 +31,9 @@ public class ArmoryWorkScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        renderCacheQueue.clear();
         displayGuns.clear();
+        displayGunCacheEntries.clear();
 
         Player player = minecraft != null ? minecraft.player : null;
         if (player == null) {
@@ -43,11 +46,13 @@ public class ArmoryWorkScreen extends Screen {
                 break;
             }
             displayGuns.add(gun);
+            displayGunCacheEntries.add(renderCacheQueue.request(gun));
         }
     }
 
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        renderCacheQueue.tick();
         renderBackground(guiGraphics);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
@@ -101,10 +106,11 @@ public class ArmoryWorkScreen extends Screen {
 
             for (int column = 0; column < columns && gunIndex < displayGuns.size(); column++) {
                 ItemStack gun = displayGuns.get(gunIndex);
+                GunRenderCacheQueue.CacheEntry cacheEntry = gunIndex < displayGunCacheEntries.size() ? displayGunCacheEntries.get(gunIndex) : null;
                 gunIndex++;
                 int x = startX + column * (previewWidth + horizontalGap);
 
-                renderGunPreview(guiGraphics, gun, x, y, previewWidth, previewHeight);
+                renderGunPreview(guiGraphics, gun, cacheEntry, x, y, previewWidth, previewHeight);
                 guiGraphics.drawCenteredString(font, trimName(gun.getHoverName().getString(), previewWidth), x + previewWidth / 2, y + previewHeight + 6, 0xFFFFFF);
             }
             rowIndex++;
@@ -113,23 +119,13 @@ public class ArmoryWorkScreen extends Screen {
 
     private void renderGunPreview(@NotNull GuiGraphics guiGraphics,
                                   @NotNull ItemStack gun,
+                                  GunRenderCacheQueue.CacheEntry cacheEntry,
                                   int x,
                                   int y,
                                   int width,
                                   int height) {
         guiGraphics.fill(x, y, x + width, y + height, 0x22000000);
-        if (minecraft == null) {
-            return;
-        }
-        previewRenderer.renderPreview(
-                guiGraphics.pose(),
-                minecraft.renderBuffers().bufferSource(),
-                gun,
-                x,
-                y,
-                width,
-                height
-        );
+        renderCacheQueue.renderPreview(guiGraphics, cacheEntry, x, y, width, height);
     }
 
     @NotNull

@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.client.model.BedrockGunModel;
+import com.tacz.guns.client.resource.pojo.TransformScale;
 import com.tacz.guns.client.resource.GunDisplayInstance;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
@@ -15,6 +16,8 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Vector3f;
+
 import java.util.Optional;
 
 /**
@@ -30,7 +33,7 @@ public final class FirstPersonStyleGunPreviewRenderer {
     private static final float YAW_DEGREES = -90.0F;
     private static final float ROLL_DEGREES = 0.0F;
     private static final float OFFSET_X = 0.0F;
-    private static final float OFFSET_Y = 0.0F;
+    private static final float OFFSET_Y = -2.0F;
     private static final float OFFSET_Z = 160.0F;
 
     private FirstPersonStyleGunPreviewRenderer() {
@@ -63,7 +66,7 @@ public final class FirstPersonStyleGunPreviewRenderer {
             return;
         }
 
-        float scale = Math.max(28.0F, Math.min(width, height) * 0.92F);
+        float scale = Math.max(20.0F, Math.min(width * 0.24F, height * 0.72F));
         float centerX = x + width * 0.5F + OFFSET_X;
         float centerY = y + height * 0.5F + OFFSET_Y;
 

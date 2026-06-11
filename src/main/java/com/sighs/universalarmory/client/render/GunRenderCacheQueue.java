@@ -7,6 +7,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.math.Axis;
 import com.sighs.universalarmory.Universalarmory;
 import net.minecraft.client.renderer.GameRenderer;
@@ -39,9 +41,9 @@ import java.util.Set;
 public final class GunRenderCacheQueue {
 
     private static final GunRenderCacheQueue INSTANCE = new GunRenderCacheQueue();
+    private static final String CACHE_VERSION = "v5";
     private static final int CACHE_TEXTURE_WIDTH = 768;
     private static final int CACHE_TEXTURE_HEIGHT = 384;
-    private static final float CACHE_SCALE = 56.0F;
     private static final int MAX_CACHE_SIZE = 64;
 
     private final Map<GunRenderCacheKey, CacheEntry> cache = new LinkedHashMap<>();
@@ -187,17 +189,39 @@ public final class GunRenderCacheQueue {
             RenderSystem.enableDepthTest();
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
-            PoseStack poseStack = new PoseStack();
+            RenderSystem.backupProjectionMatrix();
+            PoseStack modelViewStack = RenderSystem.getModelViewStack();
+            modelViewStack.pushPose();
+            modelViewStack.setIdentity();
+            modelViewStack.translate(0.0D, 0.0D, 1000.0D - net.minecraftforge.client.ForgeHooksClient.getGuiFarPlane());
+            RenderSystem.applyModelViewMatrix();
 
-            MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();
-            RenderResult result = renderGunDisplayFirstPersonStyle(entry.gunStack, poseStack, bufferSource);
-            bufferSource.endBatch();
-            Lighting.setupFor3DItems();
-            if (result == RenderResult.NOT_READY) {
-                throw new PreviewNotReadyException();
-            }
-            if (result != RenderResult.READY) {
-                throw new IllegalStateException("Gun display render failed for " + entry.gunStack.getItem());
+            Matrix4f guiProjection = new Matrix4f().setOrtho(
+                    0.0F,
+                    (float) CACHE_TEXTURE_WIDTH,
+                    (float) CACHE_TEXTURE_HEIGHT,
+                    0.0F,
+                    1000.0F,
+                    net.minecraftforge.client.ForgeHooksClient.getGuiFarPlane()
+            );
+            RenderSystem.setProjectionMatrix(guiProjection, VertexSorting.ORTHOGRAPHIC_Z);
+
+            try {
+                MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();
+                PoseStack poseStack = new PoseStack();
+                RenderResult result = renderGunDisplayFirstPersonStyle(entry.gunStack, poseStack, bufferSource);
+                bufferSource.endBatch();
+                Lighting.setupFor3DItems();
+                if (result == RenderResult.NOT_READY) {
+                    throw new PreviewNotReadyException();
+                }
+                if (result != RenderResult.READY) {
+                    throw new IllegalStateException("Gun display render failed for " + entry.gunStack.getItem());
+                }
+            } finally {
+                modelViewStack.popPose();
+                RenderSystem.applyModelViewMatrix();
+                RenderSystem.restoreProjectionMatrix();
             }
 
             NativeImage image = new NativeImage(CACHE_TEXTURE_WIDTH, CACHE_TEXTURE_HEIGHT, false);
@@ -262,14 +286,11 @@ public final class GunRenderCacheQueue {
             for (int x = 0; x < CACHE_TEXTURE_WIDTH; x++) {
                 int pixel = image.getPixelRGBA(x, y);
                 int alpha = (pixel >>> 24) & 0xFF;
-                int blue = pixel & 0xFF;
-                int green = (pixel >>> 8) & 0xFF;
-                int red = (pixel >>> 16) & 0xFF;
-                int brightness = red + green + blue;
 
-                // Convert the cleared black background to transparent, then use the
-                // remaining non-black pixels as the preview bounds.
-                if (alpha <= 20 || brightness <= 42) {
+                // The render target is cleared to transparent black, so alpha is
+                // sufficient to separate background from the gun. Using brightness
+                // here incorrectly crops dark gun materials.
+                if (alpha <= 20) {
                     image.setPixelRGBA(x, y, 0);
                     continue;
                 }
@@ -354,7 +375,7 @@ public final class GunRenderCacheQueue {
 
         @NotNull
         public static GunRenderCacheKey from(@NotNull ItemStack stack) {
-            String itemId = Objects.toString(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()), "");
+            String itemId = CACHE_VERSION + "|" + Objects.toString(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()), "");
             String tagData = Objects.toString(stack.getTag(), "");
             return new GunRenderCacheKey(itemId, tagData);
         }
