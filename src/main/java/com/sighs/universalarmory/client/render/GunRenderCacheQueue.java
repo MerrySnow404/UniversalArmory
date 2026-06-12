@@ -45,6 +45,9 @@ public final class GunRenderCacheQueue {
     private static final int CACHE_TEXTURE_WIDTH = 768;
     private static final int CACHE_TEXTURE_HEIGHT = 384;
     private static final int MAX_CACHE_SIZE = 64;
+    private static final int CLEAR_RED = 255;
+    private static final int CLEAR_GREEN = 0;
+    private static final int CLEAR_BLUE = 255;
 
     private final Map<GunRenderCacheKey, CacheEntry> cache = new LinkedHashMap<>();
     private final Queue<GunRenderCacheKey> pendingQueue = new ArrayDeque<>();
@@ -180,7 +183,7 @@ public final class GunRenderCacheQueue {
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         TextureTarget cacheTarget = new TextureTarget(CACHE_TEXTURE_WIDTH, CACHE_TEXTURE_HEIGHT, true, Minecraft.ON_OSX);
         try {
-            cacheTarget.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+            cacheTarget.setClearColor(1.0F, 0.0F, 1.0F, 1.0F);
             cacheTarget.clear(Minecraft.ON_OSX);
             cacheTarget.bindWrite(true);
 
@@ -230,6 +233,7 @@ public final class GunRenderCacheQueue {
             image.downloadTexture(0, true);
             image.flipY();
 
+            updateContentBounds(entry, image);
             DynamicTexture dynamicTexture = new DynamicTexture(image);
             net.minecraft.resources.ResourceLocation location = minecraft.getTextureManager().register(
                     Universalarmory.MODID + "/gun_cache/" + Integer.toHexString(key.hashCode()),
@@ -237,7 +241,6 @@ public final class GunRenderCacheQueue {
             );
 
             releaseEntryTexture(minecraft, entry);
-            updateContentBounds(entry, image);
             entry.texture = dynamicTexture;
             entry.textureLocation = location;
         } finally {
@@ -277,6 +280,8 @@ public final class GunRenderCacheQueue {
     }
 
     private void updateContentBounds(@NotNull CacheEntry entry, @NotNull NativeImage image) {
+        int[] columnCoverage = new int[CACHE_TEXTURE_WIDTH];
+        int[] rowCoverage = new int[CACHE_TEXTURE_HEIGHT];
         int minX = CACHE_TEXTURE_WIDTH;
         int minY = CACHE_TEXTURE_HEIGHT;
         int maxX = -1;
@@ -286,14 +291,16 @@ public final class GunRenderCacheQueue {
             for (int x = 0; x < CACHE_TEXTURE_WIDTH; x++) {
                 int pixel = image.getPixelRGBA(x, y);
                 int alpha = (pixel >>> 24) & 0xFF;
+                int blue = pixel & 0xFF;
+                int green = (pixel >>> 8) & 0xFF;
+                int red = (pixel >>> 16) & 0xFF;
 
-                // The render target is cleared to transparent black, so alpha is
-                // sufficient to separate background from the gun. Using brightness
-                // here incorrectly crops dark gun materials.
-                if (alpha <= 20) {
+                if ((red == CLEAR_RED && green == CLEAR_GREEN && blue == CLEAR_BLUE) || alpha <= 20) {
                     image.setPixelRGBA(x, y, 0);
                     continue;
                 }
+                columnCoverage[x] += alpha;
+                rowCoverage[y] += alpha;
                 if (x < minX) minX = x;
                 if (y < minY) minY = y;
                 if (x > maxX) maxX = x;
@@ -309,10 +316,34 @@ public final class GunRenderCacheQueue {
             return;
         }
 
-        entry.contentMinX = Math.max(0, minX - 2);
-        entry.contentMinY = Math.max(0, minY - 2);
-        entry.contentWidth = Math.min(CACHE_TEXTURE_WIDTH - entry.contentMinX, (maxX - minX) + 5);
-        entry.contentHeight = Math.min(CACHE_TEXTURE_HEIGHT - entry.contentMinY, (maxY - minY) + 5);
+        int coverageThreshold = 96;
+        int robustMinX = findCoverageStart(columnCoverage, coverageThreshold, minX, maxX);
+        int robustMaxX = findCoverageEnd(columnCoverage, coverageThreshold, minX, maxX);
+        int robustMinY = findCoverageStart(rowCoverage, coverageThreshold, minY, maxY);
+        int robustMaxY = findCoverageEnd(rowCoverage, coverageThreshold, minY, maxY);
+
+        entry.contentMinX = Math.max(0, robustMinX - 2);
+        entry.contentMinY = Math.max(0, robustMinY - 2);
+        entry.contentWidth = Math.min(CACHE_TEXTURE_WIDTH - entry.contentMinX, (robustMaxX - robustMinX) + 5);
+        entry.contentHeight = Math.min(CACHE_TEXTURE_HEIGHT - entry.contentMinY, (robustMaxY - robustMinY) + 5);
+    }
+
+    private int findCoverageStart(@NotNull int[] coverage, int threshold, int fallbackStart, int fallbackEnd) {
+        for (int i = fallbackStart; i <= fallbackEnd; i++) {
+            if (coverage[i] >= threshold) {
+                return i;
+            }
+        }
+        return fallbackStart;
+    }
+
+    private int findCoverageEnd(@NotNull int[] coverage, int threshold, int fallbackStart, int fallbackEnd) {
+        for (int i = fallbackEnd; i >= fallbackStart; i--) {
+            if (coverage[i] >= threshold) {
+                return i;
+            }
+        }
+        return fallbackEnd;
     }
 
     @NotNull
