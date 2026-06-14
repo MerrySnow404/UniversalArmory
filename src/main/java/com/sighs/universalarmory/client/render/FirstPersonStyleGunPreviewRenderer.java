@@ -5,19 +5,22 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.tacz.guns.api.TimelessAPI;
+import com.tacz.guns.api.item.IGun;
 import com.tacz.guns.client.model.BedrockGunModel;
-import com.tacz.guns.client.resource.pojo.TransformScale;
 import com.tacz.guns.client.resource.GunDisplayInstance;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import org.joml.Vector3f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 /**
@@ -27,14 +30,19 @@ import java.util.Optional;
  */
 public final class FirstPersonStyleGunPreviewRenderer {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(FirstPersonStyleGunPreviewRenderer.class);
     private static final FirstPersonStyleGunPreviewRenderer INSTANCE = new FirstPersonStyleGunPreviewRenderer();
 
     private static final float PITCH_DEGREES = 0.0F;
     private static final float YAW_DEGREES = -90.0F;
     private static final float ROLL_DEGREES = 0.0F;
-    private static final float OFFSET_X = 0.0F;
-    private static final float OFFSET_Y = -2.0F;
+    private static final float OFFSET_X = -28.0F;
+    private static final float OFFSET_Y = 24.0F;
     private static final float OFFSET_Z = 160.0F;
+    private static final Field CURRENT_GUN_ITEM_FIELD = findField("currentGunItem");
+    private static final Field CURRENT_EXTEND_MAG_LEVEL_FIELD = findField("currentExtendMagLevel");
+    private static final Field RENDER_MOUNT_FIELD = findField("renderMount");
+    private static final Field ADAPTER_TO_RENDER_FIELD = findField("adapterToRender");
 
     private FirstPersonStyleGunPreviewRenderer() {
     }
@@ -44,29 +52,34 @@ public final class FirstPersonStyleGunPreviewRenderer {
         return INSTANCE;
     }
 
-    public void renderPreview(@NotNull PoseStack poseStack,
-                              @NotNull MultiBufferSource.BufferSource bufferSource,
-                              @NotNull ItemStack gunStack,
-                              int x,
-                              int y,
-                              int width,
-                              int height) {
+    public boolean renderPreview(@NotNull PoseStack poseStack,
+                                 @NotNull MultiBufferSource.BufferSource bufferSource,
+                                 @NotNull ItemStack gunStack,
+                                 int x,
+                                 int y,
+                                 int width,
+                                 int height) {
         if (gunStack.isEmpty()) {
-            return;
+            LOGGER.info("Gun preview skip: empty stack");
+            return false;
         }
 
         Minecraft minecraft = Minecraft.getInstance();
-        Optional<GunDisplayInstance> gunDisplay = TimelessAPI.getGunDisplay(gunStack);
+        Optional<GunDisplayInstance> gunDisplay = resolveGunDisplay(gunStack);
         GunDisplayInstance displayInstance = gunDisplay.orElse(null);
         if (displayInstance == null) {
-            return;
+            LOGGER.info("Gun preview skip: missing display item={} tag={}",
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()), gunStack.getTag());
+            return false;
         }
         BedrockGunModel gunModel = displayInstance.getGunModel();
         if (gunModel == null) {
-            return;
+            LOGGER.info("Gun preview skip: missing model item={} tag={}",
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()), gunStack.getTag());
+            return false;
         }
 
-        float scale = Math.max(20.0F, Math.min(width * 0.24F, height * 0.72F));
+        float scale = Math.max(20.0F, Math.min(width * 0.42F, height * 1.18F));
         float centerX = x + width * 0.5F + OFFSET_X;
         float centerY = y + height * 0.5F + OFFSET_Y;
 
@@ -105,5 +118,50 @@ public final class FirstPersonStyleGunPreviewRenderer {
         Lighting.setupFor3DItems();
         RenderSystem.disableBlend();
         poseStack.popPose();
+        LOGGER.info("Gun preview rendered item={} tag={} displayTexture={}",
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()),
+                gunStack.getTag(),
+                displayInstance.getModelTexture());
+        return true;
+    }
+
+    @NotNull
+    private Optional<GunDisplayInstance> resolveGunDisplay(@NotNull ItemStack gunStack) {
+        Optional<GunDisplayInstance> display = TimelessAPI.getGunDisplay(gunStack);
+        if (display.isPresent()) {
+            LOGGER.info("Gun preview display resolved from stack item={} tag={}",
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()), gunStack.getTag());
+            return display;
+        }
+
+        IGun gun = IGun.getIGunOrNull(gunStack);
+        if (gun == null) {
+            LOGGER.info("Gun preview display resolve failed: stack is not IGun item={} tag={}",
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()), gunStack.getTag());
+            return Optional.empty();
+        }
+
+        ResourceLocation gunId = gun.getGunId(gunStack);
+        ResourceLocation displayId = gun.getGunDisplayId(gunStack);
+        if (displayId == null) {
+            LOGGER.info("Gun preview display resolve failed: missing displayId gunId={} item={} tag={}",
+                    gunId, net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(gunStack.getItem()), gunStack.getTag());
+            return Optional.empty();
+        }
+        Optional<GunDisplayInstance> fallback = TimelessAPI.getGunDisplay(displayId, gunId);
+        LOGGER.info("Gun preview display fallback gunId={} displayId={} commonIndex={} resolved={}",
+                gunId, displayId, TimelessAPI.getCommonGunIndex(gunId).isPresent(), fallback.isPresent());
+        return fallback;
+    }
+
+    @NotNull
+    private static Field findField(@NotNull String fieldName) {
+        try {
+            Field field = BedrockGunModel.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Missing BedrockGunModel field " + fieldName, exception);
+        }
     }
 }

@@ -1,7 +1,9 @@
 package com.sighs.universalarmory;
 
 import com.mojang.logging.LogUtils;
+import com.sighs.apricityui.init.Element;
 import com.sighs.apricityui.registry.ApricityUIRegistry;
+import com.sighs.universalarmory.apricity.element.GunShowElement;
 import com.sighs.universalarmory.block.ArmoryBlock;
 import com.sighs.universalarmory.block.entity.ArmoryBlockEntity;
 import net.minecraft.client.Minecraft;
@@ -98,15 +100,7 @@ public class Universalarmory {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // Some common setup code
         LOGGER.info("HELLO FROM COMMON SETUP");
-        LOGGER.info("DIRT BLOCK >> {}", ForgeRegistries.BLOCKS.getKey(Blocks.DIRT));
-
-        if (Config.logDirtBlock) LOGGER.info("DIRT BLOCK >> {}", ForgeRegistries.BLOCKS.getKey(Blocks.DIRT));
-
-        LOGGER.info(Config.magicNumberIntroduction + Config.magicNumber);
-
-        Config.items.forEach((item) -> LOGGER.info("ITEM >> {}", item.toString()));
     }
 
     // Add the example block item to the building blocks tab
@@ -128,7 +122,10 @@ public class Universalarmory {
 
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
-            event.enqueueWork(() -> ApricityUIRegistry.scanPackage("com.sighs.universalarmory.apricity.element"));
+            event.enqueueWork(() -> {
+                ApricityUIRegistry.scanPackage("com.sighs.universalarmory.apricity.element");
+                Element.register("gunshow", (document, tagName) -> new GunShowElement(document));
+            });
         }
     }
 }

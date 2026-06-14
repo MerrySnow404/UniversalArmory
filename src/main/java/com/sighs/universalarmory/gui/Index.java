@@ -23,7 +23,7 @@ public class Index {
     private static final Logger LOGGER = LoggerFactory.getLogger(Index.class);
 
     /** 前端 HTML 路径 */
-    public static final String UI_PATH = "ua_ms/example1.html";
+    public static final String UI_PATH = "uams/example1.html";
 
     /** 单例 */
     private static Index instance;

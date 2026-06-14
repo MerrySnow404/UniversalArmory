@@ -17,6 +17,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.platform.Lighting;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
@@ -27,6 +28,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -40,6 +43,7 @@ import java.util.Set;
 
 public final class GunRenderCacheQueue {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(GunRenderCacheQueue.class);
     private static final GunRenderCacheQueue INSTANCE = new GunRenderCacheQueue();
     private static final String CACHE_VERSION = "v5";
     private static final int CACHE_TEXTURE_WIDTH = 768;
@@ -52,6 +56,7 @@ public final class GunRenderCacheQueue {
     private final Map<GunRenderCacheKey, CacheEntry> cache = new LinkedHashMap<>();
     private final Queue<GunRenderCacheKey> pendingQueue = new ArrayDeque<>();
     private final Set<GunRenderCacheKey> queuedKeys = new HashSet<>();
+    private final Set<GunRenderCacheKey> loggedFailureKeys = new HashSet<>();
     private final FirstPersonStyleGunPreviewRenderer firstPersonPreviewRenderer = FirstPersonStyleGunPreviewRenderer.getInstance();
 
     private GunRenderCacheQueue() {
@@ -64,7 +69,7 @@ public final class GunRenderCacheQueue {
 
     public void tick() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || pendingQueue.isEmpty()) {
+        if (pendingQueue.isEmpty()) {
             return;
         }
 
@@ -76,25 +81,37 @@ public final class GunRenderCacheQueue {
 
         CacheEntry entry = cache.get(key);
         if (entry == null) {
+            LOGGER.info("Gun cache tick dropped missing entry key={} pending={}", key, pendingQueue.size());
             return;
         }
         if (entry.status == CacheStatus.READY || entry.status == CacheStatus.RENDERING) {
+            LOGGER.info("Gun cache tick skipped key={} status={} pending={}", key, entry.status, pendingQueue.size());
             return;
         }
 
+        LOGGER.info("Gun cache bake begin key={} status={} pending={} item={} tag={}",
+                key, entry.status, pendingQueue.size(),
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(entry.gunStack.getItem()),
+                entry.gunStack.getTag());
         entry.status = CacheStatus.RENDERING;
         try {
             bakeEntry(minecraft, key, entry);
             entry.status = CacheStatus.READY;
+            LOGGER.info("Gun cache bake ready key={} texture={} bounds={}x{}+{},{}",
+                    key, entry.textureLocation, entry.contentWidth, entry.contentHeight, entry.contentMinX, entry.contentMinY);
         } catch (PreviewNotReadyException ignored) {
             entry.status = CacheStatus.PENDING;
             if (queuedKeys.add(key)) {
                 pendingQueue.offer(key);
             }
+            LOGGER.info("Gun cache bake not ready key={} requeued={} pending={}", key, queuedKeys.contains(key), pendingQueue.size());
         } catch (Exception exception) {
             entry.status = CacheStatus.FAILED;
+            if (loggedFailureKeys.add(key)) {
+                LOGGER.warn("Gun render cache bake failed key={} item={} tag={}", key, entry.gunStack.getItem(), entry.gunStack.getTag(), exception);
+            }
         }
-        entry.lastAccessTick = minecraft.level.getGameTime();
+        entry.lastAccessTick = minecraft.level != null ? minecraft.level.getGameTime() : 0L;
         trimCacheIfNeeded(minecraft);
     }
 
@@ -143,6 +160,30 @@ public final class GunRenderCacheQueue {
         RenderSystem.disableBlend();
     }
 
+    public void renderPreviewBuffered(@NotNull PoseStack poseStack, @Nullable CacheEntry entry, int x, int y, int width, int height) {
+        if (entry == null || entry.textureLocation == null || entry.status != CacheStatus.READY) {
+            return;
+        }
+
+        BlitRect rect = computeBlitRect(entry, x, y, width, height);
+        float u0 = (float) rect.sourceX / (float) CACHE_TEXTURE_WIDTH;
+        float v0 = (float) rect.sourceY / (float) CACHE_TEXTURE_HEIGHT;
+        float u1 = (float) (rect.sourceX + rect.sourceWidth) / (float) CACHE_TEXTURE_WIDTH;
+        float v1 = (float) (rect.sourceY + rect.sourceHeight) / (float) CACHE_TEXTURE_HEIGHT;
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        Matrix4f matrix = poseStack.last().pose();
+        MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
+        com.mojang.blaze3d.vertex.VertexConsumer consumer = bufferSource.getBuffer(RenderType.text(entry.textureLocation));
+        consumer.vertex(matrix, rect.drawX, rect.drawY + rect.drawHeight, 0.0F).color(255, 255, 255, 255).uv(u0, v1).uv2(LightTexture.FULL_BRIGHT).endVertex();
+        consumer.vertex(matrix, rect.drawX + rect.drawWidth, rect.drawY + rect.drawHeight, 0.0F).color(255, 255, 255, 255).uv(u1, v1).uv2(LightTexture.FULL_BRIGHT).endVertex();
+        consumer.vertex(matrix, rect.drawX + rect.drawWidth, rect.drawY, 0.0F).color(255, 255, 255, 255).uv(u1, v0).uv2(LightTexture.FULL_BRIGHT).endVertex();
+        consumer.vertex(matrix, rect.drawX, rect.drawY, 0.0F).color(255, 255, 255, 255).uv(u0, v0).uv2(LightTexture.FULL_BRIGHT).endVertex();
+        bufferSource.endBatch(RenderType.text(entry.textureLocation));
+        RenderSystem.disableBlend();
+    }
+
     @Nullable
     public CacheEntry request(@NotNull ItemStack gunStack) {
         if (gunStack.isEmpty()) {
@@ -158,8 +199,20 @@ public final class GunRenderCacheQueue {
             cache.put(key, entry);
         }
         entry.lastAccessTick = minecraft.level != null ? minecraft.level.getGameTime() : 0L;
+        if (entry.status == CacheStatus.FAILED) {
+            entry.status = CacheStatus.PENDING;
+            loggedFailureKeys.remove(key);
+        }
         if (entry.status == CacheStatus.PENDING && queuedKeys.add(key)) {
             pendingQueue.offer(key);
+            LOGGER.info("Gun cache request queued key={} item={} tag={} pending={}",
+                    key,
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(normalizedStack.getItem()),
+                    normalizedStack.getTag(),
+                    pendingQueue.size());
+        } else {
+            LOGGER.info("Gun cache request reused key={} status={} texture={} pending={}",
+                    key, entry.status, entry.textureLocation, pendingQueue.size());
         }
         return entry;
     }
@@ -393,6 +446,10 @@ public final class GunRenderCacheQueue {
         public CacheStatus getStatus() {
             return status;
         }
+
+        public boolean hasTexture() {
+            return textureLocation != null;
+        }
     }
 
     private static final class GunRenderCacheKey {
@@ -433,31 +490,11 @@ public final class GunRenderCacheQueue {
         }
     }
 
-    private RenderResult renderGunDisplay(@NotNull ItemStack stack, @NotNull PoseStack poseStack, @NotNull MultiBufferSource.BufferSource bufferSource) {
-        try {
-            Minecraft minecraft = Minecraft.getInstance();
-            Lighting.setupForFlatItems();
-            minecraft.getItemRenderer().renderStatic(
-                    stack,
-                    ItemDisplayContext.FIXED,
-                    LightTexture.FULL_BRIGHT,
-                    OverlayTexture.NO_OVERLAY,
-                    poseStack,
-                    bufferSource,
-                    minecraft.level,
-                    0
-            );
-            return RenderResult.READY;
-        } catch (Exception exception) {
-            return RenderResult.INVALID;
-        }
-    }
-
     private RenderResult renderGunDisplayFirstPersonStyle(@NotNull ItemStack stack,
                                                           @NotNull PoseStack poseStack,
                                                           @NotNull MultiBufferSource.BufferSource bufferSource) {
         try {
-            firstPersonPreviewRenderer.renderPreview(
+            boolean rendered = firstPersonPreviewRenderer.renderPreview(
                     poseStack,
                     bufferSource,
                     stack,
@@ -466,8 +503,10 @@ public final class GunRenderCacheQueue {
                     CACHE_TEXTURE_WIDTH * 3 / 4,
                     CACHE_TEXTURE_HEIGHT * 3 / 5
             );
-            return RenderResult.READY;
+            return rendered ? RenderResult.READY : RenderResult.NOT_READY;
         } catch (Exception exception) {
+            LOGGER.warn("Gun cache first-person preview render exception item={} tag={}",
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem()), stack.getTag(), exception);
             return RenderResult.INVALID;
         }
     }

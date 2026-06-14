@@ -19,7 +19,7 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = Universalarmory.MODID, value = Dist.CLIENT)
 public class GUI {
 
-    private static final String UI_PATH = "ua_ms/example1.html";
+    private static final String UI_PATH = "uams/example1.html";
 
     /**
      * 打开改枪 UI。
