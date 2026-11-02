@@ -1,0 +1,8 @@
+{
+  "block.universalarmory.armory": "军械库",
+  "container.universalarmory.armory": "军械库",
+  "itemGroup.universalarmory": "万能军械库",
+  "screen.universalarmory.armory_work": "军械库工作台",
+  "screen.universalarmory.armory_work.bound": "已绑定军械库",
+  "screen.universalarmory.armory_work.unbound": "当前没有绑定军械库"
+}
