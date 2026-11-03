@@ -1,0 +1,13 @@
+def libraries = project.ext.armoryLocalLibraries
+repositories {
+    exclusiveContent {
+        forRepository {
+            flatDir { dirs libraries }
+        }
+        filter { includeGroup 'local' }
+    }
+}
+
+fileTree(dir: libraries, include: ['*.jar'], exclude: ['*-sources.jar', '*-javadoc.jar']).each { jar ->
+    dependencies.add('modImplementation', "local:${jar.name[0..-5]}:local")
+}

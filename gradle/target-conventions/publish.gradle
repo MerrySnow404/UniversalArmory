@@ -1,19 +1,6 @@
 // Applied from an individual target project, not from the aggregate root project.
 apply plugin: 'maven-publish'
 
-repositories {
-    exclusiveContent {
-        forRepository {
-            flatDir { dirs layout.projectDirectory.dir('libs') }
-        }
-        filter { includeGroup 'local' }
-    }
-}
-
-fileTree(dir: file('libs'), include: ['*.jar'], exclude: ['*-sources.jar', '*-javadoc.jar']).each { jar ->
-    dependencies.add('modImplementation', "local:${jar.name[0..-5]}:local")
-}
-
 // common/ is a shared source tree compiled into this target via source-set
 // sharing (not an included Gradle project), so the shared resources directory is
 // referenced by relative path instead of project(':common').

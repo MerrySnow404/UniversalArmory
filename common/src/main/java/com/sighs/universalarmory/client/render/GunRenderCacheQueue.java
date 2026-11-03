@@ -45,9 +45,9 @@ public final class GunRenderCacheQueue {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GunRenderCacheQueue.class);
     private static final GunRenderCacheQueue INSTANCE = new GunRenderCacheQueue();
-    private static final String CACHE_VERSION = "v5";
-    private static final int CACHE_TEXTURE_WIDTH = 768;
-    private static final int CACHE_TEXTURE_HEIGHT = 384;
+    private static final String CACHE_VERSION = "v6";
+    private static final int CACHE_TEXTURE_WIDTH = 1536;
+    private static final int CACHE_TEXTURE_HEIGHT = 768;
     private static final int MAX_CACHE_SIZE = 64;
     private static final int CLEAR_RED = 255;
     private static final int CLEAR_GREEN = 0;
@@ -235,6 +235,12 @@ public final class GunRenderCacheQueue {
     private void bakeEntry(@NotNull Minecraft minecraft, @NotNull GunRenderCacheKey key, @NotNull CacheEntry entry) throws Exception {
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         TextureTarget cacheTarget = new TextureTarget(CACHE_TEXTURE_WIDTH, CACHE_TEXTURE_HEIGHT, true, Minecraft.ON_OSX);
+        boolean scissor = org.lwjgl.opengl.GL11.glIsEnabled(org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+        int[] scissorBox = new int[4];
+        org.lwjgl.opengl.GL11.glGetIntegerv(org.lwjgl.opengl.GL11.GL_SCISSOR_BOX, scissorBox);
+        boolean depthMask = org.lwjgl.opengl.GL11.glGetBoolean(org.lwjgl.opengl.GL11.GL_DEPTH_WRITEMASK);
+        RenderSystem.disableScissor();
+        RenderSystem.depthMask(true);
         try {
             cacheTarget.setClearColor(1.0F, 0.0F, 1.0F, 1.0F);
             cacheTarget.clear(Minecraft.ON_OSX);
@@ -300,6 +306,10 @@ public final class GunRenderCacheQueue {
             mainTarget.bindWrite(true);
             RenderSystem.viewport(0, 0, mainTarget.width, mainTarget.height);
             cacheTarget.destroyBuffers();
+            RenderSystem.depthMask(depthMask);
+            if (scissor) {
+                RenderSystem.enableScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
+            }
         }
     }
 
@@ -408,7 +418,7 @@ public final class GunRenderCacheQueue {
 
         float widthScale = (float) (width - 4) / (float) sourceWidth;
         float heightScale = (float) (height - 4) / (float) sourceHeight;
-        float scale = Math.max(0.1F, Math.min(widthScale, heightScale));
+        float scale = Math.max(0.001F, Math.min(widthScale, heightScale));
 
         int drawWidth = Math.max(1, Math.round(sourceWidth * scale));
         int drawHeight = Math.max(1, Math.round(sourceHeight * scale));

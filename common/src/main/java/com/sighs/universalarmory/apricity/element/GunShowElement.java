@@ -2,12 +2,12 @@ package com.sighs.universalarmory.apricity.element;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.sighs.apricityui.init.Document;
-import com.sighs.apricityui.instance.element.MinecraftElement;
+import com.sighs.apricityui.element.MinecraftElement;
 import com.sighs.apricityui.registry.annotation.ElementRegister;
 import com.sighs.apricityui.render.Base;
 import com.sighs.apricityui.render.Rect;
-import com.sighs.apricityui.style.Position;
-import com.sighs.apricityui.style.Size;
+import com.sighs.apricityui.layout.Position;
+import com.sighs.apricityui.layout.Size;
 import com.sighs.universalarmory.client.render.FirstPersonStyleGunPreviewRenderer;
 import com.sighs.universalarmory.client.render.GunRenderCacheQueue;
 import com.sighs.universalarmory.gui.util.AttachmentUtils;
@@ -107,8 +107,10 @@ public class GunShowElement extends MinecraftElement {
             ItemStack stack = getCachedGunStack();
             logRenderState(null, bounds);
             if (!stack.isEmpty()) {
+                Base.commitDraws();
                 MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
                 directRenderer.renderPreview(poseStack, bufferSource, stack, bounds.x, bounds.y, bounds.width, bounds.height);
+                Base.beginRendering();
             }
             return;
         }
@@ -120,18 +122,11 @@ public class GunShowElement extends MinecraftElement {
             entry = stack.isEmpty() ? null : renderCacheQueue.request(stack);
             putRuntimeCache(CACHE_ENTRY_KEY, entry);
         }
-        renderCacheQueue.tick();
-
         logRenderState(entry, bounds);
 
-        renderCacheQueue.renderPreviewBuffered(
-                poseStack,
-                entry,
-                bounds.x,
-                bounds.y,
-                bounds.width,
-                bounds.height
-        );
+        Base.commitDraws();
+        renderCacheQueue.renderPreview(poseStack, entry, bounds.x, bounds.y, bounds.width, bounds.height);
+        Base.beginRendering();
     }
 
     @Override

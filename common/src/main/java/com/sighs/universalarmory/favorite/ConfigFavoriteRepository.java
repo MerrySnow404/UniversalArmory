@@ -21,8 +21,13 @@ public final class ConfigFavoriteRepository implements FavoriteRepository {
     @NotNull
     public List<ItemStack> getFavorites() {
         List<ItemStack> favorites = new ArrayList<>();
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
         for (String serialized : Config.getFavoriteStacks()) {
-            FavoriteStackCodec.decode(serialized).ifPresent(favorites::add);
+            FavoriteStackCodec.decode(serialized).ifPresent(stack -> {
+                if (seen.add(com.sighs.universalarmory.armory.ArmoryItemIdentity.key(stack))) {
+                    favorites.add(stack);
+                }
+            });
         }
         return List.copyOf(favorites);
     }
@@ -36,15 +41,10 @@ public final class ConfigFavoriteRepository implements FavoriteRepository {
     @Override
     public boolean addFavorite(@NotNull ItemStack stack) {
         Optional<String> encoded = FavoriteStackCodec.encode(stack);
-        if (encoded.isEmpty()) {
+        if (encoded.isEmpty() || containsFavorite(stack)) {
             return false;
         }
-
         List<String> favorites = new ArrayList<>(Config.getFavoriteStacks());
-        if (favorites.contains(encoded.get())) {
-            return false;
-        }
-
         favorites.add(encoded.get());
         Config.setFavoriteStacks(favorites);
         return true;
@@ -52,13 +52,13 @@ public final class ConfigFavoriteRepository implements FavoriteRepository {
 
     @Override
     public boolean removeFavorite(@NotNull ItemStack stack) {
-        Optional<String> encoded = FavoriteStackCodec.encode(stack);
-        if (encoded.isEmpty()) {
+        if (!supports(stack)) {
             return false;
         }
-
+        String key = com.sighs.universalarmory.armory.ArmoryItemIdentity.key(stack);
         List<String> favorites = new ArrayList<>(Config.getFavoriteStacks());
-        boolean removed = favorites.remove(encoded.get());
+        boolean removed = favorites.removeIf(serialized -> FavoriteStackCodec.decode(serialized)
+                .map(item -> com.sighs.universalarmory.armory.ArmoryItemIdentity.key(item).equals(key)).orElse(false));
         if (removed) {
             Config.setFavoriteStacks(favorites);
         }
@@ -67,17 +67,24 @@ public final class ConfigFavoriteRepository implements FavoriteRepository {
 
     @Override
     public boolean containsFavorite(@NotNull ItemStack stack) {
-        Optional<String> encoded = FavoriteStackCodec.encode(stack);
-        return encoded.isPresent() && Config.getFavoriteStacks().contains(encoded.get());
+        if (!supports(stack)) {
+            return false;
+        }
+        String key = com.sighs.universalarmory.armory.ArmoryItemIdentity.key(stack);
+        return getFavorites().stream().anyMatch(item ->
+                com.sighs.universalarmory.armory.ArmoryItemIdentity.key(item).equals(key));
     }
 
     @Override
     public boolean replaceFavorites(@NotNull Collection<String> serializedFavorites) {
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
         for (String serialized : serializedFavorites) {
-            FavoriteStackCodec.decode(serialized)
-                    .flatMap(FavoriteStackCodec::encode)
-                    .ifPresent(normalized::add);
+            FavoriteStackCodec.decode(serialized).ifPresent(stack -> {
+                if (seen.add(com.sighs.universalarmory.armory.ArmoryItemIdentity.key(stack))) {
+                    FavoriteStackCodec.encode(stack).ifPresent(normalized::add);
+                }
+            });
         }
 
         List<String> updated = List.copyOf(normalized);

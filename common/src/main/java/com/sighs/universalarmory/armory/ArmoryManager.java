@@ -48,6 +48,11 @@ public final class ArmoryManager {
         getBoundMap(player).remove(player.getUUID());
     }
 
+    public static void clearSessions() {
+        CLIENT_BOUND_INSTANCES.clear();
+        SERVER_BOUND_INSTANCES.clear();
+    }
+
     @NotNull
     private static Map<UUID, ArmoryInstance> getBoundMap(@NotNull Player player) {
         return player.level().isClientSide ? CLIENT_BOUND_INSTANCES : SERVER_BOUND_INSTANCES;

@@ -23,11 +23,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Field;
 import java.util.Optional;
 
-/**
- * 备用方案：
- * 用第一人称物品渲染上下文，把枪固定挪到屏幕中间做侧视预览。
- * 这条路不依赖单独的枪模界面逻辑，后续可以替换现有缓存烘焙入口做实验。
- */
 public final class FirstPersonStyleGunPreviewRenderer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FirstPersonStyleGunPreviewRenderer.class);
@@ -79,7 +74,7 @@ public final class FirstPersonStyleGunPreviewRenderer {
             return false;
         }
 
-        float scale = Math.max(20.0F, Math.min(width * 0.42F, height * 1.18F));
+        float scale = Math.max(1.0F, Math.min(width * 0.20F, height * 0.60F));
         float centerX = x + width * 0.5F + OFFSET_X;
         float centerY = y + height * 0.5F + OFFSET_Y;
 

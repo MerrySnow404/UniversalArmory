@@ -15,7 +15,8 @@ public final class FavoriteStackCodec {
     }
 
     public static boolean supports(@Nullable ItemStack stack) {
-        return AttachmentUtils.isGun(stack) || AttachmentUtils.isAttachment(stack);
+        return AttachmentUtils.isGun(stack) || AttachmentUtils.isAttachment(stack)
+                || stack != null && !stack.isEmpty() && com.tacz.guns.api.item.IAmmo.getIAmmoOrNull(stack) != null;
     }
 
     @NotNull

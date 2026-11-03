@@ -42,7 +42,12 @@ tasks.named('sourcesJar').configure { dependsOn 'prepareCommonSources' }
 legacyForge {
     version = "${forge_minecraft_version}-${forge_version}"
     runs {
-        client { client() }
+        client {
+            client()
+            if (providers.gradleProperty('armory.testWorld').isPresent()) {
+                programArguments.addAll '--quickPlaySingleplayer', providers.gradleProperty('armory.testWorld').get()
+            }
+        }
         server {
             server()
             programArgument '--nogui'
@@ -66,14 +71,48 @@ legacyForge {
     }
 }
 
-apply from: file('../../gradle/target-conventions/universalarmory-dependencies.gradle')
-
-dependencies {
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven { url = 'https://maven.sighs.cc/repository/maven-public/' }
+        }
+        filter { includeGroup 'com.sighs' }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Curse Maven'
+                url = 'https://cursemaven.com'
+            }
+        }
+        filter { includeGroup 'curse.maven' }
+    }
 }
 
+repositories {
+    exclusiveContent {
+        forRepository {
+            flatDir { dirs file('../../../AutoJS/targets/forge-1.20.1/build/libs') }
+        }
+        filter { includeGroup 'autojs.dev' }
+    }
+}
+
+dependencies {
+    modRuntimeOnly 'autojs.dev:AutoJS-forge-1.20.1:1.0.1'
+    compileOnly 'org.jetbrains:annotations:24.0.1'
+    modImplementation 'com.sighs:ApricityUI-forge-1.20.1:1.2.9'
+    modImplementation 'curse.maven:kubejs-238086:5853326'
+    modImplementation 'curse.maven:rhino-416294:6186971'
+    modImplementation 'curse.maven:architectury-api-419699:5137938'
+    modImplementation 'curse.maven:tacz-addon-1238419:8204790'
+}
+
+ext.armoryLocalLibraries = file('libs')
+apply from: file('../../gradle/target-conventions/local-dependencies.gradle')
+
 mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
 }
 

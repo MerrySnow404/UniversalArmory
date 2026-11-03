@@ -184,7 +184,6 @@ public final class ArmoryGunQueries {
                 ForgeRegistries.ITEMS.getKey(item),
                 gun.getGunDisplayId(stack),
                 stack.getHoverName().getString());
-        fillPreviewAttachments(stack);
         return stack;
     }
 

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="aui-viewport" content="mode=browser">
+  <meta name="aui-mouse-events" content="intercept">
+  <meta name="aui-preload" content="true">
+  
+  
+  
+  <link rel="stylesheet" href="/apricityui/theme/t15-mecha/t15-mecha.css">
+  <link rel="stylesheet" href="armory.css">
+  <title>万用军械库</title>
+</head>
+<body class="t15-mecha-theme ua-app">
+
+  <header class="ua-topbar">
+    <div class="ua-brand">
+      <span class="ua-mark">UA</span>
+      <span class="ua-brand-name">万用军械库</span>
+      <span class="ua-anno">UNIVERSAL ARMORY // 07</span>
+    </div>
+    <nav class="ua-nav" aria-label="主导航">
+      <button id="nav-home" class="tab active" type="button">01 主页</button>
+      <button id="nav-inventory" class="tab" type="button">02 库存</button>
+      <button id="nav-catalogue" class="tab" type="button">03 军备总览</button>
+    </nav>
+    <div class="ua-top-right">
+      <span id="connection" class="badge-2 badge-2-yellow">预览模式</span>
+      <button id="close" class="icon-button ua-close" type="button" aria-label="关闭">X</button>
+    </div>
+  </header>
+
+  <div class="ua-subbar">
+    <button id="back" class="button button-normal button-small" type="button">&lt; 返回</button>
+    <nav class="breadcrumb ua-crumbs" id="crumbs">
+      <span>军械库</span>
+      <span id="page-title">主页</span>
+    </nav>
+    <span id="message" class="ua-message">等待军械库同步</span>
+    <span id="summary" class="ua-anno">配置 0 · 总量 0</span>
+    <button id="refresh" class="button button-normal button-small" type="button">刷新</button>
+  </div>
+
+  <main class="ua-main">
+    <div id="content" class="ua-content"></div>
+  </main>
+
+  <footer class="ua-statusbar">
+    <span><i class="ua-dot"></i> 军械库核心 · 无容量上限</span>
+    <span id="status-hint" class="ua-anno">左键详情 / 右键菜单 / Esc 返回</span>
+    <span class="ua-anno">U.A.S. // 07</span>
+  </footer>
+
+</body>
+</html>

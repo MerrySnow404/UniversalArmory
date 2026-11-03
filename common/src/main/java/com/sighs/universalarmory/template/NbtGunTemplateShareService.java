@@ -215,15 +215,10 @@ public final class NbtGunTemplateShareService implements GunTemplateShareService
 
     @NotNull
     private static ItemStack createAttachmentStack(@NotNull ResourceLocation attachmentId) {
-        Item item = ForgeRegistries.ITEMS.getValue(attachmentId);
-        if (item == null) {
-            throw new IllegalArgumentException("Unknown attachment item: " + attachmentId);
+        if (TimelessAPI.getCommonAttachmentIndex(attachmentId).isEmpty()) {
+            throw new IllegalArgumentException("Unknown attachment: " + attachmentId);
         }
-        ItemStack stack = new ItemStack(item);
-        if (!AttachmentUtils.isAttachment(stack)) {
-            throw new IllegalArgumentException("Configured item is not an attachment: " + attachmentId);
-        }
-        return stack;
+        return com.tacz.guns.api.item.builder.AttachmentItemBuilder.create().setId(attachmentId).setCount(1).build();
     }
 
     @Nullable
@@ -294,8 +289,8 @@ public final class NbtGunTemplateShareService implements GunTemplateShareService
     @NotNull
     private static String readString(@NotNull DataInputStream data) throws IOException {
         int length = readVarInt(data);
-        if (length < 0) {
-            throw new IOException("Negative string length: " + length);
+        if (length < 0 || length > data.available()) {
+            throw new IOException("Invalid string length: " + length);
         }
         byte[] bytes = new byte[length];
         data.readFully(bytes);

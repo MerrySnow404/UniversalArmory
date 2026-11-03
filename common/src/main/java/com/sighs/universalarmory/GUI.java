@@ -1,49 +1,32 @@
 package com.sighs.universalarmory;
 
-import com.sighs.apricityui.ApricityUI;
-import com.sighs.universalarmory.gui.ArmoryWorkScreen;
-import com.sighs.universalarmory.gui.Index;
-import com.sighs.universalarmory.gui.util.AttachmentUtils;
+import com.sighs.universalarmory.gui.ArmoryScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
-/**
- * 万用军械库 GUI 入口。
- *
- * <p>负责监听按键事件打开改枪 UI，以及管理 ApricityUI 屏幕生命周期。
- */
-@Mod.EventBusSubscriber(modid = Universalarmory.MODID, value = Dist.CLIENT)
-public class GUI {
+public final class GUI {
+    private GUI() {
+    }
 
-    private static final String UI_PATH = "uams/example1.html";
-
-    /**
-     * 打开改枪 UI。
-     * <p>
-     * 外部按键绑定或命令调用此方法。
-     */
     public static void open() {
-        // 在打开前扫描玩家背包中的枪械
-        Player player = net.minecraft.client.Minecraft.getInstance().player;
-        if (player != null) {
-            Index.getInstance().scanInventory(player);
-        }
-        ApricityUI.openScreen(UI_PATH);
+        Minecraft.getInstance().setScreen(new ArmoryScreen());
     }
 
-    /**
-     * 关闭当前 UI。
-     */
     public static void close() {
-        ApricityUI.closeScreen();
+        Minecraft.getInstance().setScreen(null);
     }
 
-    public static void openArmoryWorkScreen() {
+    public static void openBound(net.minecraft.core.BlockPos pos) {
         Minecraft minecraft = Minecraft.getInstance();
-        minecraft.setScreen(new ArmoryWorkScreen());
+        if (minecraft.player == null || minecraft.level == null
+                || !(minecraft.level.getBlockEntity(pos) instanceof com.sighs.universalarmory.block.entity.ArmoryBlockEntity armory)) {
+            return;
+        }
+        com.sighs.universalarmory.armory.ArmoryManager.bind(minecraft.player, armory);
+        com.sighs.universalarmory.armory.ArmoryClientState.begin(pos);
+        if (minecraft.screen instanceof ArmoryScreen screen) {
+            screen.resetBoundView();
+        } else {
+            open();
+        }
     }
 }
